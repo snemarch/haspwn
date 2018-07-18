@@ -9,7 +9,7 @@ Might eventually evolve into something useful, but for now it's mostly a playgro
 
 ## Format of input file
 
-The text version of the password list consists of fixed-length lines, formatted as:
+The text version of the password hash list consists of fixed-length lines, formatted as:
 SHA-1 as 40 hex chars, 1 char colon delimiter, 20 chars space-padded "number of hits" ascii decimal, \r\n.
 
 ## Current ideas
@@ -20,6 +20,9 @@ useful with it. Treat it as a journey, starting with naïve code and linear sear
 Plenty of things to consider. The input is sorted, so a few iterations from now, the plan is to do binary
 search instead of a linear scan. Before getting there, do a few optimizations of the linear scan, and get
 familiar with the Go profiling tools.
+
+After hacking in buffered reading, encoding/hexDecode is responsible for 33% of the runtime. Next iteration:
+getting rid repeated calls to hexDecode when dealing with the text version of the password hashes.
 
 Current linear scan is *slow*, since we're doing raw file I/O without buffering. That's a lot of time wasted
 doing kernel/usermode transition on syscalls. Next up is adding buffered reading. When implementing binary
@@ -44,7 +47,14 @@ scenario, but it's nice to think of the code structure required to handle this c
 How to instantiate text vs binary interfaces? Trying the {text, binary} implementations in turn? Manual
 instantiation based on commandline flags?
 
-Current speed: benchmark limited to 2.5mil hashes. 8.36s for `getNextEntry` version, 11.89s for `getEntryAt`.
+Current speed: benchmark limited to 2.5mil hashes.
+    `getEntryAt`: 11.89s
+    `getNextEntry`: 8.36s
+    `getNextEntry`, buffered: 1.98s
+
+## Authors
+
+* **Sune Marcher** - [snemarch](https://github.com/snemarch)
 
 ## License
 

@@ -4,10 +4,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -23,7 +25,7 @@ type hashEntry struct {
 const recordSize = 63
 const benchmarkMaxIter = 2500000
 
-func getNextEntry(f *os.File) (*hashEntry, error) {
+func getNextEntry(f io.Reader) (*hashEntry, error) {
 	buf := make([]byte, recordSize)
 	read, err := f.Read(buf)
 
@@ -80,6 +82,8 @@ func main() {
 	records := s.Size() / int64(recordSize)
 	fmt.Printf("File contains %d records\n", records)
 
+	bf := bufio.NewReaderSize(f, recordSize*1000)
+
 	toFind := sha1.Sum([]byte("password"))
 	fmt.Printf("Searching for %s\n", hex.EncodeToString(toFind[:]))
 
@@ -90,27 +94,29 @@ search:
 			fmt.Printf("\rChecking hash #%d", i)
 		}
 
-		hash, err := getNextEntry(f) // 8.36s for 2.5mil reads
-		// hash, err := getEntryAt(f, int64(i)) // 11.89s for 2.5mil reads
+		hash, err := getNextEntry(bf)
+		// hash, err := getEntryAt(f, int64(i))
 		check(err)
 
 		res := bytes.Compare(hash.Hash[:], toFind[:])
 		switch {
 		case i > benchmarkMaxIter:
-			fmt.Printf("Exiting for profiling reasons")
+			fmt.Printf("\nExiting for profiling reasons")
 			break search
 
 		case res == 0:
-			fmt.Printf("Found hash, %d occurences\n", hash.Count)
+			fmt.Printf("\nFound hash, %d occurences\n", hash.Count)
 			break search
 
 		case res > 1:
-			fmt.Printf("hash %s > %s\n",
+			fmt.Printf("\nhash %s > %s\n",
 				hex.EncodeToString(hash.Hash[:]),
 				hex.EncodeToString(toFind[:]))
 			break search
 		}
 	}
+
+	f.Close()
 
 	fmt.Printf("\n%d hashes searched\n", i)
 }
