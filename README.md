@@ -40,11 +40,15 @@ After hacking in buffered reading, encoding/hexDecode was responsible for 33% of
 re-architected with the concept of `HashBase` and `HashHolder` interfaces, the idea being that the `HashBase`
 implementation can choose a `HashHolder` implementation that minimizes conversion.
 
-Speed history, benchmark limited to 2.5mil hashes:
-    `getEntryAt`: 11.89s
-    `getNextEntry`: 8.36s
-    `getNextEntry`, buffered: 1.98s
-    rearchitected: 350ms
+For the first four iterations, the benchmarking was done for 2.5 million hash searches. From iteration five,
+this was increased to 100M to have meaningful numbers again.
+
+Speed history:
+    iteration 1: `getEntryAt`: 11.89s
+    iteration 2: `getNextEntry`: 8.36s
+    iteration 3: `getNextEntry`, buffered: 1.98s
+    iteration 4: rearchitected: 350ms (25-27s with 100M)
+    iteration 5: Visit: buffer allocation outside loop, 20-22s
 
 ## Optimizations ideas
 

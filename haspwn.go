@@ -10,7 +10,7 @@ import (
 	"github.com/snemarch/haspwn/pwnhashes"
 )
 
-const benchmarkMaxIter = 2500000
+const benchmarkMaxIter = 100000000
 
 func check(e error) {
 	if e != nil {
@@ -19,7 +19,11 @@ func check(e error) {
 }
 
 func main() {
-	defer profile.Start(profile.ProfilePath(".")).Stop()
+	benchmark := true
+	if benchmark {
+		ptype := profile.CPUProfile
+		defer profile.Start(profile.ProfilePath("."), ptype).Stop()
+	}
 
 	const databasePath = "d:/pwned-passwords-ordered-2.0.txt"
 	const passwordToFind = "password"
@@ -40,10 +44,6 @@ func main() {
 
 		match := hash.Match(matcher)
 		switch {
-		case index > benchmarkMaxIter:
-			fmt.Printf("\nExiting for profiling reasons\n")
-			return false
-
 		case match == 0:
 			fmt.Printf("\nFound hash, %d occurences\n", hash.Count())
 			return false
@@ -51,6 +51,12 @@ func main() {
 		case match > 1:
 			fmt.Printf("\nhash %s > %s\n", hash, matcher)
 			return false
+
+		case index > benchmarkMaxIter:
+			if benchmark {
+				fmt.Printf("\nExiting for profiling reasons\n")
+				return false
+			}
 		}
 
 		return true

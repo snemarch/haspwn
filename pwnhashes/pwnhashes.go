@@ -95,15 +95,15 @@ func (base *hashBaseText) NewHashHolder(hexHash string) HashHolder {
 
 func (base *hashBaseText) NewPasswordHolder(hexHash string) HashHolder {
 	hash := sha1.Sum([]byte(hexHash))
-	hexhash := hex.EncodeToString(hash[:])
+	hexhash := strings.ToUpper(hex.EncodeToString(hash[:]))
 
 	return &hashMatcherText{hash: hexhash}
 }
 
 func (base *hashBaseText) Visit(visitor func(HashEntry, int) bool) {
 	bf := bufio.NewReaderSize(base.file, base.recordSize()*1000)
+	buf := make([]byte, base.recordSize())
 	for i := 0; i < base.HashCount(); i++ {
-		buf := make([]byte, base.recordSize())
 		read, err := bf.Read(buf)
 		if err != nil {
 			return
