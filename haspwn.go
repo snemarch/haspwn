@@ -4,59 +4,13 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
-	"io"
-	"os"
-	"strconv"
-	"strings"
 
 	"github.com/pkg/profile"
+	"github.com/snemarch/haspwn/pwnhashes"
 )
 
-type hashEntry struct {
-	Hash  [20]byte
-	Count int64
-}
-
-const recordSize = 63
 const benchmarkMaxIter = 2500000
-
-func getNextEntry(f io.Reader) (*hashEntry, error) {
-	buf := make([]byte, recordSize)
-	read, err := f.Read(buf)
-
-	return constructEntry(buf, read, err)
-}
-
-func getEntryAt(f *os.File, num int64) (*hashEntry, error) {
-	buf := make([]byte, recordSize)
-	read, err := f.ReadAt(buf, num*int64(recordSize))
-
-	return constructEntry(buf, read, err)
-}
-
-func constructEntry(buf []byte, read int, err error) (*hashEntry, error) {
-	if err != nil {
-		return nil, nil
-	}
-	if read != recordSize {
-		return nil, fmt.Errorf("%d != %d", read, recordSize)
-	}
-
-	entry := new(hashEntry)
-	read, err = hex.Decode(entry.Hash[:], buf[0:40])
-
-	scount := strings.TrimSpace(string(buf[41:61]))
-	count, err := strconv.ParseInt(scount, 10, 64)
-
-	entry.Count = count
-
-	return entry, err
-}
 
 func check(e error) {
 	if e != nil {
@@ -66,57 +20,39 @@ func check(e error) {
 
 func main() {
 	defer profile.Start(profile.ProfilePath(".")).Stop()
-	const recordSize = 63
 
-	f, err := os.Open("d:/pwned-passwords-ordered-2.0.txt")
+	const databasePath = "d:/pwned-passwords-ordered-2.0.txt"
+	const passwordToFind = "password"
+
+	hashes, err := pwnhashes.Open(databasePath)
 	check(err)
+	defer hashes.Close()
 
-	s, err := f.Stat()
-	check(err)
+	fmt.Printf("File contains %d records\n", hashes.HashCount())
 
-	remainder := s.Size() % 63
-	if remainder != 0 {
-		panic("File size isn't a multiple of 63")
-	}
+	matcher := hashes.NewPasswordHolder(passwordToFind)
 
-	records := s.Size() / int64(recordSize)
-	fmt.Printf("File contains %d records\n", records)
-
-	bf := bufio.NewReaderSize(f, recordSize*1000)
-
-	toFind := sha1.Sum([]byte("password"))
-	fmt.Printf("Searching for %s\n", hex.EncodeToString(toFind[:]))
-
-	i := int64(0)
-search:
-	for i = int64(0); i < records; i++ {
-		if (i % 100000) == 0 {
-			fmt.Printf("\rChecking hash #%d", i)
+	fmt.Printf("Searching for %s\n", matcher.String())
+	hashes.Visit(func(hash pwnhashes.HashEntry, index int) bool {
+		if (index % 100000) == 0 {
+			fmt.Printf("\rChecking hash #%d", index)
 		}
 
-		hash, err := getNextEntry(bf)
-		// hash, err := getEntryAt(f, int64(i))
-		check(err)
-
-		res := bytes.Compare(hash.Hash[:], toFind[:])
+		match := hash.Match(matcher)
 		switch {
-		case i > benchmarkMaxIter:
-			fmt.Printf("\nExiting for profiling reasons")
-			break search
+		case index > benchmarkMaxIter:
+			fmt.Printf("\nExiting for profiling reasons\n")
+			return false
 
-		case res == 0:
-			fmt.Printf("\nFound hash, %d occurences\n", hash.Count)
-			break search
+		case match == 0:
+			fmt.Printf("\nFound hash, %d occurences\n", hash.Count())
+			return false
 
-		case res > 1:
-			fmt.Printf("\nhash %s > %s\n",
-				hex.EncodeToString(hash.Hash[:]),
-				hex.EncodeToString(toFind[:]))
-			break search
+		case match > 1:
+			fmt.Printf("\nhash %s > %s\n", hash, matcher)
+			return false
 		}
-	}
 
-	f.Close()
-
-	fmt.Printf("\n%d hashes searched\n", i)
+		return true
+	})
 }
