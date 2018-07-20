@@ -1,4 +1,4 @@
-// Package pwnhashes provides
+// Package pwnhashes provides an interface for dealing with password hashes.
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@ package pwnhashes
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -19,26 +20,30 @@ import (
 type HashHolder interface {
 	Binary() [20]byte
 	String() string
+	Str() []byte
 }
 
 type hashMatcherText struct {
-	hash string
+	hash []byte
 }
 
 func (match *hashMatcherText) Binary() [20]byte {
-	binhash, _ := hex.DecodeString(match.hash)
 	var result [20]byte
-	copy(result[:], binhash)
+	hex.Decode(result[:], match.hash)
 	return result
 }
 
 func (match *hashMatcherText) String() string {
+	return string(match.hash)
+}
+
+func (match *hashMatcherText) Str() []byte {
 	return match.hash
 }
 
 type hashEntryText struct {
-	hash  [40]byte
-	count [20]byte
+	hash  []byte // 40 chars
+	count []byte // 20 chars
 }
 
 // HashEntry is an entry from the hash database
@@ -49,15 +54,15 @@ type HashEntry interface {
 }
 
 func (hash *hashEntryText) Match(m HashHolder) int {
-	return strings.Compare(string(hash.hash[:]), m.String())
+	return bytes.Compare(hash.hash, m.Str())
 }
 
 func (hash *hashEntryText) String() string {
-	return string(hash.hash[:])
+	return string(hash.hash)
 }
 
 func (hash *hashEntryText) Count() int64 {
-	scount := strings.TrimSpace(string(hash.count[:]))
+	scount := strings.TrimSpace(string(hash.count))
 	count, _ := strconv.ParseInt(scount, 10, 64)
 	return count
 }
@@ -90,19 +95,20 @@ type hashBaseText struct {
 }
 
 func (base *hashBaseText) NewHashHolder(hexHash string) HashHolder {
-	return &hashMatcherText{hash: hexHash}
+	return &hashMatcherText{hash: []byte(hexHash)}
 }
 
 func (base *hashBaseText) NewPasswordHolder(hexHash string) HashHolder {
 	hash := sha1.Sum([]byte(hexHash))
 	hexhash := strings.ToUpper(hex.EncodeToString(hash[:]))
 
-	return &hashMatcherText{hash: hexhash}
+	return &hashMatcherText{hash: []byte(hexhash)}
 }
 
 func (base *hashBaseText) Visit(visitor func(HashEntry, int) bool) {
 	bf := bufio.NewReaderSize(base.file, base.recordSize()*1000)
 	buf := make([]byte, base.recordSize())
+	entry := hashEntryText{hash: buf[:40], count: buf[41:61]}
 	for i := 0; i < base.HashCount(); i++ {
 		read, err := bf.Read(buf)
 		if err != nil {
@@ -111,11 +117,6 @@ func (base *hashBaseText) Visit(visitor func(HashEntry, int) bool) {
 		if read != base.recordSize() {
 			return
 		}
-
-		entry := hashEntryText{}
-		copy(entry.hash[:], buf[:40])
-		copy(entry.count[:], buf[41:61])
-
 		if !visitor(&entry, i) {
 			break
 		}

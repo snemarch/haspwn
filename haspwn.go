@@ -35,6 +35,8 @@ func main() {
 	fmt.Printf("File contains %d records\n", hashes.HashCount())
 
 	matcher := hashes.NewPasswordHolder(passwordToFind)
+	// matcher := hashes.NewHashHolder("FFFFFFFEE791CBAC0F6305CAF0CEE06BBE131160") // last hash in database
+	// matcher := hashes.NewHashHolder("3333333333333333333333333333333333333333") // test for early-out
 
 	fmt.Printf("Searching for %s\n", matcher.String())
 	hashes.Visit(func(hash pwnhashes.HashEntry, index int) bool {
@@ -48,7 +50,7 @@ func main() {
 			fmt.Printf("\nFound hash, %d occurences\n", hash.Count())
 			return false
 
-		case match > 1:
+		case match > 0:
 			fmt.Printf("\nhash %s > %s\n", hash, matcher)
 			return false
 

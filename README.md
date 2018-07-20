@@ -8,6 +8,12 @@ purposefully naïve, since that'll give some nice, big factors on the first opti
 
 Might eventually evolve into something useful, but for now it's mostly a playground. Goldplating OK.
 
+## Getting started
+
+To play around with this stuff, you need a working Go environment, and a copy of the password hash list (the
+sorted-by-hash version) from Troy's site. As it's early days, path to the dump file, hash/password to search
+for and benchmark mode are all hardcoded, and changing requires manual modification + rebuild.
+
 ## Format of input file
 
 The text version of the password hash list consists of fixed-length lines, formatted as:
@@ -22,6 +28,11 @@ Plenty of things to consider. The input is sorted, so a few iterations from now,
 search instead of a linear scan. Before getting there, do a few optimizations of the linear scan, and get
 familiar with the Go profiling tools.
 
+Probably time to move profiling code out of the main file, and adding a haspwn_test with a benchmark?
+
+Linear scan speed is pretty much where I want it to be. Next iteration should focus on commandline parsing or
+binary search.
+
 An interesting addition to this tool would be converting the text input to binary output - there's a *lot* of
 disk space to be saved (reducing file size from 29.43 -> 13.08 gigabytes - or 11.21 if we choose a 32bit int
 for breach count). The first iteration of HasPwn had `getNumRecords` and `getRecord(num)` methods, which were
@@ -29,7 +40,6 @@ dropped by the re-architectured version in favor of a `Visit` method. A `BinaryS
 this interface as well, but there's some more re-architecturing needed to get things right; to avoid code
 duplication as well as giving a coherent feel.
 
-Probably time to move profiling code out of the main file, and adding a haspwn_test with a benchmark?
 
 ## Optimization history
 
@@ -43,19 +53,23 @@ implementation can choose a `HashHolder` implementation that minimizes conversio
 For the first four iterations, the benchmarking was done for 2.5 million hash searches. From iteration five,
 this was increased to 100M to have meaningful numbers again.
 
+The sixth iteration changed the data representation, and got rid of the overhead associated with juggling
+between strings, arrays and slices. And while I like being specific about types and lengths when they're
+known, the conversions required also felt a bit clunky. So, "slices, slices, everywhere" - and a very nice
+performance gain. We're now at 28s to find the last hash in the file, against 71s for ripgrep 0.8.1. Which is
+obviously an unfair comparison, since we're dealing with fixed-record entries and don't need to parse line
+endings :)
+
 Speed history:
-    iteration 1: `getEntryAt`: 11.89s
-    iteration 2: `getNextEntry`: 8.36s
-    iteration 3: `getNextEntry`, buffered: 1.98s
-    iteration 4: rearchitected: 350ms (25-27s with 100M)
-    iteration 5: Visit: buffer allocation outside loop, 20-22s
+
+* iteration 1: `getEntryAt`: 11.89s
+* iteration 2: `getNextEntry`: 8.36s
+* iteration 3: `getNextEntry`, buffered: 1.98s
+* iteration 4: rearchitected: 350ms (25-27s with 100M)
+* iteration 5: Visit: buffer allocation outside loop, 20-22s
+* iteration 6: Visit: get rid of conversions (mem alloc and data move), 5-6s
 
 ## Optimizations ideas
-
-Have a thorough look at the data representation - there's bound to be overhead associated with the current
-juggling between strings, arrays and slices. And while I like being specific about types and lengths when
-they're known, the conversions required for the current data layout feel a bit clunky. Perhaps it's better to
-just go "slices, slices, everywhere"?
 
 On SSD and NVMe storage, we should be able to benefit from parallelization - those storage types don't tend to
 reach full througput (even if doing raw I/O with no compute) from a single access stream. It seems like a lot
