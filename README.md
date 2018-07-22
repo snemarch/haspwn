@@ -11,8 +11,8 @@ Might eventually evolve into something useful, but for now it's mostly a playgro
 ## Getting started
 
 To play around with this stuff, you need a working Go environment, and a copy of the password hash list (the
-sorted-by-hash version) from Troy's site. As it's early days, path to the dump file, hash/password to search
-for and benchmark mode are all hardcoded, and changing requires manual modification + rebuild.
+sorted-by-hash version) from Troy's site. You can run `haspwn --help` to see the command line options, you'll
+likely want to supply `-database` and `-password` arguments :-)
 
 ## Format of input file
 
@@ -24,14 +24,8 @@ SHA-1 as 40 hex chars, 1 char colon delimiter, 20 chars space-padded "number of 
 First goal is handling the (sort-by-hash) pwned-passwords-ordered-2.0.txt file, and being able to do something
 useful with it. Treat it as a journey, starting with naïve code and linear search, evolving from that.
 
-Plenty of things to consider. The input is sorted, so a few iterations from now, the plan is to do binary
-search instead of a linear scan. Before getting there, do a few optimizations of the linear scan, and get
-familiar with the Go profiling tools.
-
-Probably time to move profiling code out of the main file, and adding a haspwn_test with a benchmark?
-
-Linear scan speed is pretty much where I want it to be. Next iteration should focus on commandline parsing or
-binary search.
+The old "exit after 100M iterations" has been removed - if there's any more optimization work to be done for
+the linear scan, it should probably be tested via go test benchmark?
 
 An interesting addition to this tool would be converting the text input to binary output - there's a *lot* of
 disk space to be saved (reducing file size from 29.43 -> 13.08 gigabytes - or 11.21 if we choose a 32bit int
@@ -39,7 +33,6 @@ for breach count). The first iteration of HasPwn had `getNumRecords` and `getRec
 dropped by the re-architectured version in favor of a `Visit` method. A `BinarySearch` probably belongs in
 this interface as well, but there's some more re-architecturing needed to get things right; to avoid code
 duplication as well as giving a coherent feel.
-
 
 ## Optimization history
 
@@ -60,6 +53,8 @@ performance gain. We're now at 28s to find the last hash in the file, against 71
 obviously an unfair comparison, since we're dealing with fixed-record entries and don't need to parse line
 endings :)
 
+The seventh iteration added binary search, and lookups are now pretty much instantaneous.
+
 Speed history:
 
 * iteration 1: `getEntryAt`: 11.89s
@@ -68,6 +63,7 @@ Speed history:
 * iteration 4: rearchitected: 350ms (25-27s with 100M)
 * iteration 5: Visit: buffer allocation outside loop, 20-22s
 * iteration 6: Visit: get rid of conversions (mem alloc and data move), 5-6s
+* iteration 7: binary search, completes before profiler gets a snapshot :P
 
 ## Optimizations ideas
 

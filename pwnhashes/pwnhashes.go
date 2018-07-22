@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -80,6 +81,10 @@ type HashBase interface {
 	// continue visiting or false to abort
 	Visit(func(HashEntry, int) bool)
 
+	// Search performs a binary search for the hash, and returns the found entry
+	// or nil.
+	Search(hash HashHolder) HashEntry
+
 	// HashCount returns the number of hashes in the database
 	HashCount() int
 
@@ -121,6 +126,22 @@ func (base *hashBaseText) Visit(visitor func(HashEntry, int) bool) {
 			break
 		}
 	}
+}
+
+func (base *hashBaseText) Search(hash HashHolder) HashEntry {
+	buf := make([]byte, base.recordSize())
+	entry := hashEntryText{hash: buf[:40], count: buf[41:61]}
+
+	index := sort.Search(base.HashCount(), func(index int) bool {
+		base.file.ReadAt(buf, int64(index)*int64(base.recordSize()))
+		return entry.Match(hash) >= 0
+	})
+
+	base.file.ReadAt(buf, int64(index)*int64(base.recordSize()))
+	if entry.Match(hash) == 0 {
+		return &entry
+	}
+	return nil
 }
 
 func (base *hashBaseText) HashCount() int {
