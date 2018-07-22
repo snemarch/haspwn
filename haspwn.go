@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/pkg/profile"
@@ -18,23 +19,46 @@ func check(e error) {
 	}
 }
 
+func getProfiler(b string) func(*profile.Profile) {
+	switch b {
+	case "cpu":
+		return profile.CPUProfile
+	case "mem":
+		return profile.MemProfile
+	}
+
+	return nil
+}
+
+func getMatcher(base pwnhashes.HashBase, searchType, searchTerm string) pwnhashes.HashHolder {
+	switch searchType {
+	case "password":
+		return base.NewPasswordHolder(searchTerm)
+	case "hash":
+		return base.NewHashHolder(searchTerm)
+	}
+	return nil
+}
+
 func main() {
-	benchmark := true
-	if benchmark {
-		ptype := profile.CPUProfile
+	profileType := flag.String("profile", "", "enable profiling, mem or cpu")
+	databasePath := flag.String("database", "d:/pwned-passwords-ordered-2.0.txt", "path to hash database")
+	searchType := flag.String("format", "password", "format to search for, password or hash")
+	searchTerm := flag.String("term", "password", "search term")
+
+	flag.Parse()
+
+	if ptype := getProfiler(*profileType); ptype != nil {
 		defer profile.Start(profile.ProfilePath("."), ptype).Stop()
 	}
 
-	const databasePath = "d:/pwned-passwords-ordered-2.0.txt"
-	const passwordToFind = "password"
-
-	hashes, err := pwnhashes.Open(databasePath)
+	hashes, err := pwnhashes.Open(*databasePath)
 	check(err)
 	defer hashes.Close()
 
 	fmt.Printf("File contains %d records\n", hashes.HashCount())
 
-	matcher := hashes.NewPasswordHolder(passwordToFind)
+	matcher := getMatcher(hashes, *searchType, *searchTerm)
 	// matcher := hashes.NewHashHolder("FFFFFFFEE791CBAC0F6305CAF0CEE06BBE131160") // last hash in database
 	// matcher := hashes.NewHashHolder("3333333333333333333333333333333333333333") // test for early-out
 
@@ -55,7 +79,7 @@ func main() {
 			return false
 
 		case index > benchmarkMaxIter:
-			if benchmark {
+			if *profileType != "" {
 				fmt.Printf("\nExiting for profiling reasons\n")
 				return false
 			}
